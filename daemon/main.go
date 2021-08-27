@@ -20,11 +20,14 @@ import (
 	"github.com/evilsocket/opensnitch/daemon/firewall"
 	"github.com/evilsocket/opensnitch/daemon/log"
 	"github.com/evilsocket/opensnitch/daemon/netfilter"
+	"github.com/evilsocket/opensnitch/daemon/netlink"
 	"github.com/evilsocket/opensnitch/daemon/procmon"
 	"github.com/evilsocket/opensnitch/daemon/procmon/monitor"
 	"github.com/evilsocket/opensnitch/daemon/rule"
 	"github.com/evilsocket/opensnitch/daemon/statistics"
 	"github.com/evilsocket/opensnitch/daemon/ui"
+	//nl "github.com/vishvananda/netlink"
+	//"golang.org/x/sys/unix"
 )
 
 var (
@@ -312,7 +315,26 @@ func acceptOrDeny(packet *netfilter.Packet, con *conman.Connection) *rule.Rule {
 		}
 		log.Debug("%s %s -> %s:%d (%s)", log.Bold(log.Green("✔")), log.Bold(con.Process.Path), log.Bold(con.To()), con.DstPort, ruleName)
 	} else {
-		if packet != nil {
+		if packet != nil && r.Action == rule.Reject {
+			netlink.KillSocket(con.Protocol, con.SrcIP, con.SrcPort, con.DstIP, con.DstPort)
+
+			/* We may optionally clean conntrack entries
+			filter := &nl.ConntrackFilter{}
+			filter.AddIP(nl.ConntrackOrigDstIP, con.DstIP)
+			prot := uint8(6)
+			if con.Protocol == "udp" {
+				prot = uint8(17)
+			}
+			filter.AddProtocol(prot) // mandatory. 17 - udp, 6 - tcp
+			filter.AddPort(nl.ConntrackOrigDstPort, uint16(con.DstPort))
+			if _, err := nl.ConntrackDeleteFilter(1, unix.AF_INET, filter); err != nil {
+				fmt.Printf("Error killing connection: %s\n", err)
+			} else {
+				fmt.Printf("connection killed: %v\n", con)
+			}*/
+			packet.SetVerdict(netfilter.NF_DROP)
+
+		} else {
 			packet.SetVerdict(netfilter.NF_DROP)
 		}
 
